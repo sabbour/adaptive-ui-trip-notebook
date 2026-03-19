@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AdaptiveApp, registerApp, registerPackWithSkills, clearAllPacks, getActivePackScope, setActivePackScope, SessionsSidebar, ResizeHandle, generateSessionId, saveSession, deleteSession, setSessionScope, upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '@sabbour/adaptive-ui-core';
+import { AdaptiveApp, registerApp, registerPackWithSkills, clearAllPacks, getActivePackScope, setActivePackScope, interpolate, SessionsSidebar, ResizeHandle, generateSessionId, saveSession, deleteSession, setSessionScope, upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '@sabbour/adaptive-ui-core';
 import type { AdaptiveUISpec } from '@sabbour/adaptive-ui-core';
 import { createTravelDataPack } from '@sabbour/adaptive-ui-travel-data-pack';
 import { createGoogleMapsPack } from '@sabbour/adaptive-ui-google-maps-pack';
@@ -227,6 +227,85 @@ function extractPhotosFromLayout(node: any): PhotoRef[] {
   return photos;
 }
 
+// ─── Itinerary extraction ───
+// Extracts day-by-day itinerary from accordion items with day-like labels
+interface ItineraryDay { day: number; title: string; activities: string[]; }
+
+function extractTextFromNode(node: any): string[] {
+  if (!node) return [];
+  const texts: string[] = [];
+  const t = node.type || node.t;
+  if ((t === 'markdown' || t === 'md' || t === 'text' || t === 'tx') && typeof (node.content || node.c) === 'string') {
+    texts.push(node.content || node.c);
+  }
+  if (t === 'alert' && typeof node.content === 'string') {
+    texts.push(node.content);
+  }
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) texts.push(...extractTextFromNode(child));
+  if (Array.isArray(node.items)) for (const item of node.items) texts.push(...extractTextFromNode(item));
+  return texts;
+}
+
+const DAY_RE = /^day\s*(\d+)/i;
+
+function extractItineraryFromLayout(node: any): ItineraryDay[] {
+  if (!node) return [];
+  const days: ItineraryDay[] = [];
+  const t = node.type || node.t;
+
+  // Accordion with day-labeled items
+  if (t === 'accordion' && Array.isArray(node.items)) {
+    for (const item of node.items) {
+      const label = item.title || item.label || '';
+      const match = DAY_RE.exec(label);
+      if (match) {
+        const dayNum = parseInt(match[1], 10);
+        const activities = extractTextFromNode(item);
+        days.push({ day: dayNum, title: label, activities });
+      }
+    }
+  }
+
+  // Tabs with day-labeled tabs
+  if ((t === 'tabs') && Array.isArray(node.tabs)) {
+    for (const tab of node.tabs) {
+      const label = tab.label || tab.title || '';
+      const match = DAY_RE.exec(label);
+      if (match) {
+        const dayNum = parseInt(match[1], 10);
+        const activities: string[] = [];
+        if (tab.children) for (const child of tab.children) activities.push(...extractTextFromNode(child));
+        days.push({ day: dayNum, title: label, activities });
+      }
+    }
+  }
+
+  // Card with day-like title
+  if ((t === 'card') && typeof node.title === 'string') {
+    const match = DAY_RE.exec(node.title);
+    if (match) {
+      const dayNum = parseInt(match[1], 10);
+      const activities = extractTextFromNode(node);
+      days.push({ day: dayNum, title: node.title, activities });
+    }
+  }
+
+  // Recurse children
+  const kids: any[] = node.children || node.ch || [];
+  for (const child of kids) days.push(...extractItineraryFromLayout(child));
+  if (Array.isArray(node.items) && t !== 'accordion') {
+    for (const item of node.items) days.push(...extractItineraryFromLayout(item));
+  }
+  if (Array.isArray(node.tabs) && t !== 'tabs') {
+    for (const tab of node.tabs) {
+      if (tab.children) for (const child of tab.children) days.push(...extractItineraryFromLayout(child));
+    }
+  }
+
+  return days;
+}
+
 function TravelPlannerApp() {
   // Scope sessions, artifacts, and packs to this app
   setSessionScope('travel');
@@ -264,9 +343,25 @@ function TravelPlannerApp() {
 
   // ─── Spec change handler: extract data → artifacts ───
   const handleSpecChange = useCallback((spec: AdaptiveUISpec) => {
+    const state = spec.state || {};
+
+    // Resolve {{state.xxx}} templates in extracted string values
+    function resolve(val: string): string {
+      if (val.includes('{{')) return interpolate(val, state);
+      return val;
+    }
+
+    // Skip artifacts where key fields are still unresolved templates
+    function hasUnresolved(val: string): boolean {
+      return val.includes('{{');
+    }
+
     // Extract places
     const places = extractPlacesFromLayout(spec.layout);
     for (const place of places) {
+      place.name = resolve(place.name);
+      place.query = resolve(place.query);
+      if (hasUnresolved(place.name)) continue;
       const slug = place.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
       upsertArtifact(`place-${slug}`, JSON.stringify(place), 'json', place.name);
     }
@@ -274,6 +369,11 @@ function TravelPlannerApp() {
     // Extract flights
     const flights = extractFlightsFromLayout(spec.layout);
     for (const flight of flights) {
+      flight.from = resolve(flight.from);
+      flight.to = resolve(flight.to);
+      flight.date = resolve(flight.date);
+      if (flight.returnDate) flight.returnDate = resolve(flight.returnDate);
+      if (hasUnresolved(flight.from) || hasUnresolved(flight.to) || hasUnresolved(flight.date)) continue;
       const slug = `${flight.from}-${flight.to}-${flight.date}`.toLowerCase();
       upsertArtifact(`flight-${slug}`, JSON.stringify(flight), 'json', `${flight.from} \u2192 ${flight.to}`);
     }
@@ -281,6 +381,8 @@ function TravelPlannerApp() {
     // Extract weather
     const weather = extractWeatherFromLayout(spec.layout);
     for (const w of weather) {
+      w.city = resolve(w.city);
+      if (hasUnresolved(w.city)) continue;
       const slug = w.city.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
       upsertArtifact(`weather-${slug}`, JSON.stringify(w), 'json', w.city);
     }
@@ -288,6 +390,8 @@ function TravelPlannerApp() {
     // Extract checklists
     const checklists = extractChecklistsFromLayout(spec.layout);
     for (const cl of checklists) {
+      cl.title = resolve(cl.title);
+      if (hasUnresolved(cl.title)) continue;
       const slug = cl.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
       upsertArtifact(`checklist-${slug}`, JSON.stringify(cl), 'json', cl.title);
     }
@@ -295,8 +399,20 @@ function TravelPlannerApp() {
     // Extract photos
     const photos = extractPhotosFromLayout(spec.layout);
     for (const photo of photos) {
+      photo.query = resolve(photo.query);
+      if (photo.caption) photo.caption = resolve(photo.caption);
+      if (hasUnresolved(photo.query)) continue;
       const slug = photo.query.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
       upsertArtifact(`photo-${slug}`, JSON.stringify(photo), 'json', photo.caption || photo.query);
+    }
+
+    // Extract itinerary (day-by-day)
+    const itineraryDays = extractItineraryFromLayout(spec.layout);
+    for (const day of itineraryDays) {
+      day.title = resolve(day.title);
+      day.activities = day.activities.map(a => resolve(a));
+      const slug = `day-${day.day}`;
+      upsertArtifact(`itinerary-${slug}`, JSON.stringify(day), 'json', day.title);
     }
 
     // Extract code blocks (itinerary summaries, etc.)

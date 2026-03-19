@@ -1,6 +1,6 @@
 // ─── Trip Notebook Panel ───
 // Right-side panel for the Travel Notebook that acts as a living trip scrapbook.
-// Tabbed interface: Overview | Travel | Budget | Packing
+// Tabbed interface: Overview | Itinerary | Travel | Budget | Packing
 // Auto-populated from artifacts extracted during conversation.
 
 import React, { useSyncExternalStore, useState, useCallback, useMemo } from 'react';
@@ -20,6 +20,7 @@ interface FlightInfo { from: string; to: string; date: string; returnDate?: stri
 interface WeatherInfo { city: string; }
 interface ChecklistInfo { title: string; items: string[]; bind: string; }
 interface PhotoInfo { query: string; caption?: string; }
+interface ItineraryDayInfo { day: number; title: string; activities: string[]; }
 
 // ─── Artifact categorization ───
 
@@ -30,11 +31,12 @@ interface CategorizedArtifacts {
   weather: Array<Artifact & { data: WeatherInfo }>;
   checklists: Array<Artifact & { data: ChecklistInfo }>;
   photos: Array<Artifact & { data: PhotoInfo }>;
+  itinerary: Array<Artifact & { data: ItineraryDayInfo }>;
   files: Artifact[];
 }
 
 function categorizeArtifacts(artifacts: Artifact[]): CategorizedArtifacts {
-  const result: CategorizedArtifacts = { places: [], budgetItems: [], flights: [], weather: [], checklists: [], photos: [], files: [] };
+  const result: CategorizedArtifacts = { places: [], budgetItems: [], flights: [], weather: [], checklists: [], photos: [], itinerary: [], files: [] };
   for (const a of artifacts) {
     try {
       if (a.filename.startsWith('place-')) { result.places.push({ ...a, data: JSON.parse(a.content) }); }
@@ -43,18 +45,22 @@ function categorizeArtifacts(artifacts: Artifact[]): CategorizedArtifacts {
       else if (a.filename.startsWith('weather-')) { result.weather.push({ ...a, data: JSON.parse(a.content) }); }
       else if (a.filename.startsWith('checklist-')) { result.checklists.push({ ...a, data: JSON.parse(a.content) }); }
       else if (a.filename.startsWith('photo-')) { result.photos.push({ ...a, data: JSON.parse(a.content) }); }
+      else if (a.filename.startsWith('itinerary-')) { result.itinerary.push({ ...a, data: JSON.parse(a.content) }); }
       else { result.files.push(a); }
     } catch { result.files.push(a); }
   }
+  // Sort itinerary by day number
+  result.itinerary.sort((a, b) => a.data.day - b.data.day);
   return result;
 }
 
 // ─── Tab definitions ───
 
-type TabId = 'overview' | 'travel' | 'budget' | 'packing';
+type TabId = 'overview' | 'itinerary' | 'travel' | 'budget' | 'packing';
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'overview', label: 'Overview', icon: '\uD83C\uDF0D' },
+  { id: 'itinerary', label: 'Itinerary', icon: '\uD83D\uDDD3\uFE0F' },
   { id: 'travel', label: 'Travel', icon: '\u2708\uFE0F' },
   { id: 'budget', label: 'Budget', icon: '\uD83D\uDCB0' },
   { id: 'packing', label: 'Packing', icon: '\uD83E\uDDF3' },
@@ -370,11 +376,81 @@ function PackingTab({ data, onRemove }: { data: CategorizedArtifacts; onRemove: 
   );
 }
 
+// ─── Itinerary Tab ───
+
+function ItineraryTab({ data, onRemove }: { data: CategorizedArtifacts; onRemove: (id: string) => void }) {
+  const days = data.itinerary;
+
+  if (days.length === 0) {
+    return React.createElement('div', null,
+      React.createElement(SectionHeader, null, '\uD83D\uDDD3\uFE0F Day-by-Day Itinerary'),
+      React.createElement(EmptyHint, { text: 'Your day-by-day itinerary will appear here once the assistant builds your travel plan.' })
+    );
+  }
+
+  return React.createElement('div', null,
+    React.createElement(SectionHeader, null, `\uD83D\uDDD3\uFE0F ${days.length}-Day Itinerary`),
+    ...days.map(d => React.createElement('div', {
+      key: d.id,
+      style: { marginBottom: '12px' },
+    },
+      // Day header
+      React.createElement('div', {
+        style: {
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: '4px',
+        },
+      },
+        React.createElement('div', {
+          style: {
+            display: 'flex', alignItems: 'center', gap: '8px',
+          },
+        },
+          React.createElement('span', {
+            style: {
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '24px', height: '24px', borderRadius: '50%',
+              backgroundColor: '#0891b2', color: '#fff',
+              fontSize: '11px', fontWeight: 700, flexShrink: 0,
+            },
+          }, String(d.data.day)),
+          React.createElement('span', {
+            style: { fontSize: '13px', fontWeight: 600, color: 'var(--adaptive-text)' },
+          }, d.data.title)
+        ),
+        React.createElement('button', {
+          onClick: () => onRemove(d.id),
+          style: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', opacity: 0.4 },
+          title: 'Remove',
+        }, React.createElement('img', { src: iconDelete, alt: 'Remove', width: 12, height: 12 }))
+      ),
+
+      // Activities
+      ...d.data.activities.map((activity, i) => React.createElement('div', {
+        key: `${d.id}-${i}`,
+        style: {
+          padding: '6px 10px 6px 40px',
+          fontSize: '12px', color: 'var(--adaptive-text)',
+          lineHeight: 1.5,
+          borderLeft: '2px solid rgba(8,145,178,0.2)',
+          marginLeft: '11px',
+          backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.5)' : 'transparent',
+          borderRadius: '0 6px 6px 0',
+        },
+      },
+        // Render markdown-like content as plain text (strip markdown syntax)
+        activity.length > 200 ? activity.slice(0, 200) + '\u2026' : activity
+      ))
+    ))
+  );
+}
+
 // ─── Tab badge counts ───
 
 function tabBadge(id: TabId, data: CategorizedArtifacts): number {
   switch (id) {
     case 'overview': return data.places.length + data.photos.length + data.weather.length + data.files.length;
+    case 'itinerary': return data.itinerary.length;
     case 'travel': return data.flights.length + data.places.filter(p => p.data.type === 'hotel').length;
     case 'budget': return data.budgetItems.length;
     case 'packing': return data.checklists.reduce((sum, cl) => sum + cl.data.items.length, 0);
@@ -508,6 +584,7 @@ export function TripNotebook({ collapsed, onToggleCollapse }: TripNotebookProps)
       } as React.CSSProperties,
     },
       activeTab === 'overview' && React.createElement(OverviewTab, { data, onRemove: handleRemove }),
+      activeTab === 'itinerary' && React.createElement(ItineraryTab, { data, onRemove: handleRemove }),
       activeTab === 'travel' && React.createElement(TravelTab, { data, onRemove: handleRemove }),
       activeTab === 'budget' && React.createElement(BudgetTab, { data, onRemove: handleRemove }),
       activeTab === 'packing' && React.createElement(PackingTab, { data, onRemove: handleRemove })
