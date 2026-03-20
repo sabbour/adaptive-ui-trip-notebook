@@ -1,5 +1,7 @@
 # Trip Notebook
 
+[![CI](https://github.com/sabbour/adaptive-ui-trip-notebook/actions/workflows/ci.yml/badge.svg)](https://github.com/sabbour/adaptive-ui-trip-notebook/actions/workflows/ci.yml)
+
 An AI-powered **travel planning assistant** built with the [Adaptive UI Framework](https://github.com/sabbour/adaptive-ui-framework). A conversational agent helps you plan trips with real flight data, maps, weather, and a living trip scrapbook.
 
 ## What It Does
