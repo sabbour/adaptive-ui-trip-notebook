@@ -599,6 +599,7 @@ function TravelPlannerApp() {
           sendPromptRef,
           systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
           visiblePacks: ['travel-data', 'google-maps', 'google-flights'],
+          appId: 'trip-notebook',
           theme: {
             primaryColor: '#0891b2',
             backgroundColor: 'transparent',
