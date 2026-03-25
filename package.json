@@ -12,7 +12,7 @@
     "unlink:packs": "npm unlink @sabbour/adaptive-ui-core @sabbour/adaptive-ui-travel-data-pack @sabbour/adaptive-ui-google-maps-pack @sabbour/adaptive-ui-google-flights-pack && npm install"
   },
   "dependencies": {
-    "@sabbour/adaptive-ui-core": "^0.1.0",
+    "@sabbour/adaptive-ui-core": "^1.0.0",
     "@sabbour/adaptive-ui-travel-data-pack": "^0.1.0",
     "@sabbour/adaptive-ui-google-maps-pack": "^0.1.0",
     "@sabbour/adaptive-ui-google-flights-pack": "^0.1.0",
