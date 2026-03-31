@@ -24,6 +24,20 @@
   --travel-sand: #fef3c7;
 }
 
+/* ── Base layout containment ── */
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
 /* ── Immersive gradient background ── */
 .travel-shell {
   background:
@@ -294,14 +308,100 @@
   }
 }
 
-/* ── Responsive: on smaller screens, remove outer margin ── */
+/* ── Mobile / Small Screen ── */
 @media (max-width: 768px) {
+  body, #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: auto;
+    overflow: auto;
+  }
+
+  /* Hide resize handles on small screens */
+  .travel-shell .adaptive-resize-handle {
+    display: none !important;
+  }
+
+  /* On mobile, panels are toggled by the tab bar — hide inactive panel */
+  .travel-mobile-hidden {
+    display: none !important;
+  }
+
+  .travel-mobile-active {
+    display: flex !important;
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    overflow: auto !important;
+  }
+
+  /* Sidebar needs full width when active on mobile */
+  .travel-sidebar.travel-mobile-active {
+    flex-direction: column !important;
+  }
+
+  /* Chat panel fills the screen when active */
+  .travel-chat.travel-mobile-active {
+    flex-direction: column !important;
+  }
+
+  /* Notebook panel fills the screen when active */
+  .travel-notebook.travel-mobile-active {
+    flex-direction: column !important;
+  }
+
+  /* Show the bottom tab bar — fixed to viewport bottom */
+  .travel-mobile-tabs {
+    display: flex !important;
+    position: fixed !important;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Leave space for the fixed tab bar */
+  #root > div {
+    padding-bottom: 42px;
+  }
+
+  /* Frosted glass chat container resets for mobile */
   .travel-chat-container {
     border-radius: 0;
     border: none;
     box-shadow: none;
     margin: 0 !important;
     max-width: 100% !important;
+  }
+
+  /* Compact header on mobile */
+  .travel-header {
+    padding: 6px 12px !important;
+  }
+
+  .travel-header-time {
+    display: none;
+  }
+
+  /* Improve touch targets */
+  button:not(.adaptive-settings-wrapper button) {
+    min-height: 40px;
+  }
+
+  .adaptive-input,
+  .adaptive-select,
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select {
+    height: 40px;
+    font-size: 16px; /* prevents iOS zoom on focus */
   }
 }
 

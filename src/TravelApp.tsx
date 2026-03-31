@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AdaptiveApp, registerApp, registerPackWithSkills, clearAllPacks, getActivePackScope, setActivePackScope, interpolate, SessionsSidebar, ResizeHandle, generateSessionId, saveSession, deleteSession, setSessionScope, upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '@sabbour/adaptive-ui-core';
+import { AdaptiveApp, registerApp, registerPackWithSkills, clearAllPacks, getActivePackScope, setActivePackScope, interpolate, SessionsSidebar, ResizeHandle, generateSessionId, saveSession, deleteSession, getSessions, setSessionScope, upsertArtifact, getArtifacts, subscribeArtifacts, loadArtifactsForSession, saveArtifactsForSession, deleteArtifactsForSession, setArtifactsScope } from '@sabbour/adaptive-ui-core';
 import type { AdaptiveUISpec } from '@sabbour/adaptive-ui-core';
 import { createTravelDataPack } from '@sabbour/adaptive-ui-travel-data-pack';
 import { createGoogleMapsPack } from '@sabbour/adaptive-ui-google-maps-pack';
@@ -333,6 +333,7 @@ function TravelPlannerApp() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [notebookWidth, setNotebookWidth] = useState(580);
   const [notebookCollapsed, setNotebookCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'chat' | 'notebook' | 'trips'>('chat');
 
   const handleSidebarResize = useCallback((delta: number) => {
     setSidebarWidth((w) => Math.max(160, Math.min(360, w + delta)));
@@ -441,6 +442,7 @@ function TravelPlannerApp() {
 
     const newId = generateSessionId();
     setSessionId(newId);
+    setMobileTab('chat');
     try { localStorage.setItem('adaptive-ui-travel-session', newId); } catch {}
     saveSession(newId, 'New trip', []);
     loadArtifactsForSession(newId);
@@ -449,6 +451,7 @@ function TravelPlannerApp() {
   const handleSelectSession = useCallback((id: string) => {
     saveArtifactsForSession(sessionId);
     setSessionId(id);
+    setMobileTab('chat');
     loadArtifactsForSession(id);
     try { localStorage.setItem('adaptive-ui-travel-session', id); } catch {}
   }, [sessionId]);
@@ -457,11 +460,19 @@ function TravelPlannerApp() {
     deleteSession(id);
     deleteArtifactsForSession(id);
     if (id === sessionId) {
-      const newId = generateSessionId();
-      setSessionId(newId);
-      saveSession(newId, 'New trip', []);
-      loadArtifactsForSession(newId);
-      try { localStorage.setItem('adaptive-ui-travel-session', newId); } catch {}
+      const remaining = getSessions().filter((s) => s.id !== id);
+      if (remaining.length > 0) {
+        const next = remaining[0];
+        setSessionId(next.id);
+        loadArtifactsForSession(next.id);
+        try { localStorage.setItem('adaptive-ui-travel-session', next.id); } catch {}
+      } else {
+        const newId = generateSessionId();
+        setSessionId(newId);
+        saveSession(newId, 'New trip', []);
+        loadArtifactsForSession(newId);
+        try { localStorage.setItem('adaptive-ui-travel-session', newId); } catch {}
+      }
     }
   }, [sessionId]);
 
@@ -531,6 +542,7 @@ function TravelPlannerApp() {
       ),
       // Right: time
       React.createElement('div', {
+        className: 'travel-header-time',
         style: {
           fontSize: '13px',
           color: 'rgba(255,255,255,0.6)',
@@ -553,7 +565,7 @@ function TravelPlannerApp() {
 
       // ─ Left: Sessions sidebar ─
       React.createElement('div', {
-        className: 'travel-app',
+        className: 'travel-app travel-sidebar' + (mobileTab === 'trips' ? ' travel-mobile-active' : ' travel-mobile-hidden'),
         style: {
           width: sidebarCollapsed ? '36px' : `${sidebarWidth}px`,
           flexShrink: 0, overflow: 'hidden',
@@ -569,7 +581,7 @@ function TravelPlannerApp() {
           onDeleteSession: handleDeleteSession,
           selectedFileId: null,
           onSelectFile: () => {},
-          collapsed: sidebarCollapsed,
+          collapsed: mobileTab === 'trips' ? false : sidebarCollapsed,
           onToggleCollapse: setSidebarCollapsed,
           sessionsLabel: 'Trips',
           hideFiles: true,
@@ -581,7 +593,7 @@ function TravelPlannerApp() {
 
       // ─ Center: Chat ─
       React.createElement('div', {
-        className: 'travel-chat-container travel-app',
+        className: 'travel-chat-container travel-app travel-chat' + (mobileTab === 'chat' ? ' travel-mobile-active' : ' travel-mobile-hidden'),
         style: {
           flex: 1,
           minWidth: 0,
@@ -599,6 +611,7 @@ function TravelPlannerApp() {
           sendPromptRef,
           systemPromptSuffix: TRAVEL_SYSTEM_PROMPT,
           visiblePacks: ['travel-data', 'google-maps', 'google-flights'],
+          models: ['gpt-5.3-chat', 'gpt-5.3-codex', 'gpt-5.4-nano', 'gpt-4o', 'Kimi-K2.5', 'DeepSeek-V3.2'],
           appId: 'trip-notebook',
           theme: {
             primaryColor: '#0891b2',
@@ -606,6 +619,7 @@ function TravelPlannerApp() {
             surfaceColor: 'rgba(255, 255, 255, 0.95)',
           },
           onSpecChange: handleSpecChangeWithSave,
+          onError: (error: Error) => console.error('Travel Notebook error:', error),
         })
       ),
 
@@ -614,7 +628,7 @@ function TravelPlannerApp() {
 
       // ─ Right: Trip Notebook ─
       React.createElement('div', {
-        className: 'travel-app',
+        className: 'travel-app travel-notebook' + (mobileTab === 'notebook' ? ' travel-mobile-active' : ' travel-mobile-hidden'),
         style: {
           width: notebookCollapsed ? '36px' : `${notebookWidth}px`,
           flexShrink: 0, overflow: 'hidden',
@@ -624,10 +638,64 @@ function TravelPlannerApp() {
         } as React.CSSProperties,
       },
         React.createElement(TripNotebook, {
-          collapsed: notebookCollapsed,
+          collapsed: mobileTab === 'notebook' ? false : notebookCollapsed,
           onToggleCollapse: setNotebookCollapsed,
         })
       )
+    ),
+
+    // Mobile bottom tab bar (visible only on small screens via CSS)
+    React.createElement('div', {
+      className: 'travel-mobile-tabs',
+      style: {
+        display: 'none', // shown by media query
+      } as React.CSSProperties,
+    },
+      React.createElement('button', {
+        onClick: handleNewSession,
+        'aria-label': 'Home',
+        style: {
+          padding: '10px 14px', border: 'none', cursor: 'pointer',
+          backgroundColor: 'transparent',
+          color: 'rgba(255,255,255,0.7)',
+          fontSize: '14px',
+          borderTop: '2px solid transparent',
+          fontFamily: "'Segoe UI', system-ui, sans-serif",
+        } as React.CSSProperties,
+      }, '\u2302'),
+      React.createElement('button', {
+        onClick: () => setMobileTab('chat'),
+        style: {
+          flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
+          backgroundColor: 'transparent',
+          color: mobileTab === 'chat' ? '#0891b2' : 'rgba(255,255,255,0.7)',
+          fontSize: '12px', fontWeight: mobileTab === 'chat' ? 600 : 400,
+          borderTop: mobileTab === 'chat' ? '2px solid #0891b2' : '2px solid transparent',
+          fontFamily: "'Segoe UI', system-ui, sans-serif",
+        } as React.CSSProperties,
+      }, 'Chat'),
+      React.createElement('button', {
+        onClick: () => setMobileTab('notebook'),
+        style: {
+          flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
+          backgroundColor: 'transparent',
+          color: mobileTab === 'notebook' ? '#0891b2' : 'rgba(255,255,255,0.7)',
+          fontSize: '12px', fontWeight: mobileTab === 'notebook' ? 600 : 400,
+          borderTop: mobileTab === 'notebook' ? '2px solid #0891b2' : '2px solid transparent',
+          fontFamily: "'Segoe UI', system-ui, sans-serif",
+        } as React.CSSProperties,
+      }, 'Notebook'),
+      React.createElement('button', {
+        onClick: () => setMobileTab('trips'),
+        style: {
+          flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
+          backgroundColor: 'transparent',
+          color: mobileTab === 'trips' ? '#0891b2' : 'rgba(255,255,255,0.7)',
+          fontSize: '12px', fontWeight: mobileTab === 'trips' ? 600 : 400,
+          borderTop: mobileTab === 'trips' ? '2px solid #0891b2' : '2px solid transparent',
+          fontFamily: "'Segoe UI', system-ui, sans-serif",
+        } as React.CSSProperties,
+      }, 'Trips')
     )
   );
 }
