@@ -38,6 +38,15 @@ body {
   overflow: hidden;
 }
 
+/* ── Hide AppRouter switcher bar (keep settings gear which is a separate portal) ── */
+#root > div:first-child:not(:only-child) {
+  display: none !important;
+}
+#root > div:first-child + div {
+  margin-top: 0 !important;
+  height: 100vh !important;
+}
+
 /* ── Immersive gradient background ── */
 .travel-shell {
   background:
