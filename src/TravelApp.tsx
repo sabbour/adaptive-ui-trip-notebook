@@ -7,6 +7,12 @@ import { createGoogleFlightsPack } from '@sabbour/adaptive-ui-google-flights-pac
 import { TripNotebook } from './TripNotebook';
 import './css/travel-theme.css';
 
+// Build info injected by Vite at build time
+declare const __GIT_SHA__: string;
+declare const __BUILD_TIME__: string;
+const GIT_SHA = typeof __GIT_SHA__ !== 'undefined' ? __GIT_SHA__ : 'dev';
+const BUILD_TIME = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : new Date().toISOString();
+
 // Lazy pack registration — called when this app mounts, clears other app's packs
 function ensureTravelPacks() {
   if (getActivePackScope() === 'travel') return;
@@ -540,16 +546,34 @@ function TravelPlannerApp() {
           React.createElement('div', { className: 'travel-header-subtitle' }, tagline)
         )
       ),
-      // Right: time
+      // Right: time + build info
       React.createElement('div', {
-        className: 'travel-header-time',
-        style: {
-          fontSize: '13px',
-          color: 'rgba(255,255,255,0.6)',
-          fontVariantNumeric: 'tabular-nums',
-          letterSpacing: '0.02em',
-        },
-      }, timeStr)
+        style: { display: 'flex', alignItems: 'center', gap: '12px' },
+      },
+        React.createElement('div', {
+          className: 'travel-header-time',
+          style: {
+            fontSize: '13px',
+            color: 'rgba(255,255,255,0.6)',
+            fontVariantNumeric: 'tabular-nums',
+            letterSpacing: '0.02em',
+          },
+        }, timeStr),
+        React.createElement('a', {
+          className: 'travel-header-build',
+          href: 'https://github.com/sabbour/adaptive-ui-trip-notebook/commit/' + GIT_SHA,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          style: {
+            fontSize: '11px',
+            color: 'rgba(255,255,255,0.35)',
+            textDecoration: 'none',
+            fontVariantNumeric: 'tabular-nums',
+          },
+          onMouseEnter: (e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; },
+          onMouseLeave: (e: React.MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; },
+        }, GIT_SHA + ' \u00b7 ' + new Date(BUILD_TIME).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
+      )
     ),
 
     // ── Main 3-panel layout ──

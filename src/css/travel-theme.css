@@ -326,6 +326,12 @@ body {
     overflow: auto;
   }
 
+  /* AppRouter container must flex-column and fill viewport on mobile */
+  #root > div:first-child + div {
+    height: 100dvh !important;
+    height: 100vh !important;
+  }
+
   /* Hide resize handles on small screens */
   .travel-shell .adaptive-resize-handle {
     display: none !important;
@@ -376,7 +382,7 @@ body {
   }
 
   /* Leave space for the fixed tab bar */
-  #root > div {
+  .travel-shell {
     padding-bottom: 42px;
   }
 
@@ -398,7 +404,11 @@ body {
     display: none;
   }
 
-  /* Improve touch targets */
+  .travel-header-build {
+    display: none;
+  }
+
+  /* Improve touch targets — exclude small icon buttons */
   button:not(.adaptive-settings-wrapper button) {
     min-height: 40px;
   }
